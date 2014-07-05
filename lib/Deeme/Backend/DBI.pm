@@ -7,8 +7,6 @@ use Deeme::Utils qw(_serialize _deserialize);
 use Carp 'croak';
 use constant EVENT_TABLE     => "deeme_events";
 use constant FUNCTIONS_TABLE => "deeme_functions";
-
-#use Carp::Always;
 has [qw(database _connection)];
 
 sub new {
@@ -16,13 +14,35 @@ sub new {
     $self = $self->SUPER::new(@_);
     croak "No database string defined, database option missing"
         if ( !$self->database );
-    $self->_connection( DBI->connect( @{ $self->database } ) );
     $self->_setup;
     return $self;
 }
 
+#   {
+#     no strict 'refs';
+# *{__PACKAGE__."::_table_exists"}=sub { print "@_\n"; my $self=shift; $self->_connect; $self->_table_exists->($self,@_);$self->_disconnect };
+# }
+##XXX: todo, wrap _connection between _connect and _disconnect
+
+sub _connect {
+    return $_[0]->_connection(
+        DBI->connect(
+            ref $_[0]->database eq 'ARRAY'
+            ? @{ $_[0]->database }
+            : $_[0]->database
+        )
+    );
+}
+
+sub _disconnect {
+    eval { $_[0]->_connection->commit() }
+        if ( $_[0]->_connection->{AutoCommit} == 0 );
+    $_[0]->_connection->disconnect;
+}
+
 sub _table_exists {
     my $self   = shift;
+    $self->_connect;
     my $db     = $self->_connection;
     my $table  = shift;
     my @tables = $db->tables( '', '', '', 'TABLE' );
@@ -40,38 +60,38 @@ sub _table_exists {
         };
         return 1 unless $@;
     }
+
+    $self->_disconnect;
     return 0;
 }
 
 sub _setup {
     my $self = shift;
+    $self->_connect;
     #### Check event table, creating if not exists
-    if ( !$self->_table_exists(EVENT_TABLE) ) {
-        my $sql = "
+    $self->_connection->do( "
         CREATE TABLE " . EVENT_TABLE . " (
           id       INTEGER PRIMARY KEY ,
           name    VARCHAR(100)
-        )";
-        $self->_connection->do($sql);
-    }
+        )" ) if ( !$self->_table_exists(EVENT_TABLE) );
     #### Check functions table, creating if not exists
-    if ( !$self->_table_exists(FUNCTIONS_TABLE) ) {
-        my $sql = "
+
+    $self->_connection->do( "
         CREATE TABLE " . FUNCTIONS_TABLE . " (
           id       INTEGER PRIMARY KEY,
           function TEXT,
           events_id    INT(10) NOT NULL,
           once INT(1) NOT NULL,
         foreign key (events_id) references " . EVENT_TABLE . " (id)
-        )";
-        $self->_connection->do($sql);
-    }
+        )" ) if ( !$self->_table_exists(FUNCTIONS_TABLE) );
+    $self->_disconnect;
 }
 
 sub events_get {
     my $self        = shift;
     my $name        = shift;
     my $deserialize = shift // 1;
+    $self->_connect;
     my $sth         = $self->_connection->prepare( "
         SELECT
             f.function
@@ -85,23 +105,26 @@ sub events_get {
     while ( my $aref = $sth->fetchrow_arrayref ) {
         push( @{$functions}, @$aref );
     }
-
+    $self->_disconnect;
     #deserializing subs and returning a reference
     return undef if ( @{$functions} == 0 );
     return [ map { _deserialize($_) } @{$functions} ]
         if ( $deserialize == 1 );
+
     return $functions;
 }    #get events
 
 sub events_reset {
-    my $self = shift;
-    $self->_connection->do( "DELETE FROM '" . EVENT_TABLE . "'" );
-    $self->_connection->do( "DELETE FROM '" . FUNCTIONS_TABLE . "'" );
+    $_[0]->_connect;
+    $_[0]->_connection->do( "DELETE FROM '" . EVENT_TABLE . "'" );
+    $_[0]->_connection->do( "DELETE FROM '" . FUNCTIONS_TABLE . "'" );
+    $_[0]->_disconnect;
 }
 
 sub events_onces {
     my $self = shift;
     my $name = shift;
+    $self->_connect;
     my $sth  = $self->_connection->prepare( "
         SELECT
             f.once
@@ -115,24 +138,23 @@ sub events_onces {
     while ( my $aref = $sth->fetchrow_arrayref ) {
         push( @onces, @$aref );
     }
-
+    $self->_disconnect;
     #deserializing subs and returning a reference
     return @onces;
 }    #get events
 
 sub _event_name_to_id {
-    my $self = shift;
-    my $name = shift;
-    my $sql  = 'SELECT id FROM ' . EVENT_TABLE . ' WHERE name = ? LIMIT 1';
-    return $self->_connection->selectrow_array( $sql, undef, $name );
+    return shift->_connection->selectrow_array(
+        'SELECT id FROM ' . EVENT_TABLE . ' WHERE name = ? LIMIT 1',
+        undef, shift );
 }
 
 sub once_update {
     my $self     = shift;
     my $name     = shift;
     my $onces    = shift;
+     $self->_connect;
     my $event_id = $self->_event_name_to_id($name);
-    my $dbh      = $self->_connection;
     my $sth      = $self->_connection->prepare( "
         SELECT
             id
@@ -149,29 +171,22 @@ sub once_update {
     $self->_connection->{RaiseError} = 1;
     my $sql = "UPDATE " . FUNCTIONS_TABLE . "
     SET once=?  WHERE id=? ";
-
     warn "-- Something unpredictable happened, please contact the mantainer"
         if ( scalar @{$onces} != scalar(@functions_id) );
-
-    my $end = @functions_id;
     eval {
-        # insert a new link
-
-        unless ( @functions_id == 0 ) {
-            my $sth = $self->_connection->prepare($sql);
-            $sth->execute( shift @{$onces}, shift @functions_id );
-        }
-
-        $dbh->commit();
+        $self->_connection->prepare($sql)
+            ->execute( shift @{$onces}, shift @functions_id )
+            unless ( @functions_id == 0 );
+        $self->_connection->commit();
     };
-
     if ($@) {
         warn "-- Error inserting the functions in Deeme: $@\n";
-        $dbh->rollback();
+        $self->_connection->rollback();
     }
-    $self->_connection->{AutoCommit} = 1;   # enable transactions, if possible
+    $self->_connection->{AutoCommit} = 1;    # disable transactions
     $self->_connection->{RaiseError} = 0;
-}    #get events
+         $self->_disconnect;
+}
 
 sub event_add {
     my $self = shift;
@@ -179,55 +194,64 @@ sub event_add {
     my $cb   = shift;
     my $once = shift // 0;
     $cb = _serialize($cb);
+         $self->_connect;
 
-    my $sql;
     if ( my $e_id = $self->_event_name_to_id($name) ) {
-        $sql
-            = 'SELECT id FROM '
-            . FUNCTIONS_TABLE
-            . ' WHERE events_id = ? AND function=? LIMIT 1';
         return $cb
-            if $self->_connection->selectrow_array( $sql, undef, $e_id, $cb );
-        $sql = "INSERT INTO " . FUNCTIONS_TABLE . " (events_id,function,once)
-           VALUES(?,?,?)";
-        my $sth = $self->_connection->prepare($sql);
-        $sth->execute( $e_id, $cb, $once );
+            if $self->_connection->selectrow_array(
+            'SELECT id FROM '
+                . FUNCTIONS_TABLE
+                . ' WHERE events_id = ? AND function=? LIMIT 1',
+            undef, $e_id, $cb
+            );
+        $self->_connection->prepare(
+                  "INSERT INTO "
+                . FUNCTIONS_TABLE
+                . " (events_id,function,once)
+           VALUES(?,?,?)"
+        )->execute( $e_id, $cb, $once );
     }
     else {
-        $sql = "INSERT INTO " . EVENT_TABLE . " (name)
-           VALUES(?)";
-        my $sth = $self->_connection->prepare($sql);
-        $sth->execute($name);
-        $sql = "INSERT INTO " . FUNCTIONS_TABLE . " (events_id,function,once)
-           VALUES(?,?,?)";
-        $sth = $self->_connection->prepare($sql);
-        $sth->execute(
+        $self->_connection->prepare(
+                  "INSERT INTO "
+                . EVENT_TABLE
+                . " (name)
+           VALUES(?)"
+        )->execute($name);
+        $self->_connection->prepare(
+                  "INSERT INTO "
+                . FUNCTIONS_TABLE
+                . " (events_id,function,once)
+           VALUES(?,?,?)"
+            )->execute(
             $self->_connection->last_insert_id(
                 undef, undef, FUNCTIONS_TABLE, undef
             ),
             $cb, $once
-        );
+            );
     }
+         $self->_disconnect;
+
     return $cb;
 }
 
 sub event_delete {
     my $self     = shift;
     my $name     = shift;
+         $self->_connect;
+
     my $event_id = $self->_event_name_to_id($name);
     $self->_connection->{AutoCommit} = 0;   # enable transactions, if possible
     $self->_connection->{RaiseError} = 1;
     eval {
-        my $sth = $self->_connection->prepare(
+        $self->_connection->prepare(
             "DELETE
  FROM " . FUNCTIONS_TABLE . " WHERE events_id=?"
-        );
-        $sth->execute($event_id);
-        $sth = $self->_connection->prepare(
+        )->execute($event_id);
+        $self->_connection->prepare(
             "DELETE
  FROM " . EVENT_TABLE . " WHERE id=?"
-        );
-        $sth->execute($event_id);
+        )->execute($event_id);
         $self->_connection->commit();
     };
 
@@ -238,6 +262,8 @@ sub event_delete {
 
     $self->_connection->{AutoCommit} = 1;   # enable transactions, if possible
     $self->_connection->{RaiseError} = 0;
+         $self->_disconnect;
+
 }    #delete event
 
 sub event_update {
@@ -246,23 +272,17 @@ sub event_update {
     my $functions = shift;
     my $serialize = shift // 1;
     return $self->event_delete($name) if ( scalar( @{$functions} ) == 0 );
+     $self->_connect;
 
     my $event_id = $self->_event_name_to_id($name);
 
-#     my $sth         = $self->_connection->prepare( "DELETE ".FUNCTIONS_TABLE."
-# FROM ".FUNCTIONS_TABLE." f
-# INNER JOIN
-# ".EVENT_TABLE." e on e.id = f.events_id
-# and WHERE e.name='".$name."'" );
-# $sth->execute;
     $self->_connection->{AutoCommit} = 0;   # enable transactions, if possible
     $self->_connection->{RaiseError} = 1;
     eval {
-        my $sth = $self->_connection->prepare(
+        $self->_connection->prepare(
             "DELETE
  FROM " . FUNCTIONS_TABLE . " WHERE events_id=?"
-        );
-        $sth->execute($event_id);
+        )->execute($event_id);
         my $sql
             = "INSERT INTO "
             . FUNCTIONS_TABLE
@@ -271,12 +291,12 @@ sub event_update {
 
         foreach my $f ( @{$functions} ) {
             if ( $serialize == 1 ) {
-                $sth = $self->_connection->prepare($sql);
-                $sth->execute( $event_id, _serialize($f), 0 );
+                $self->_connection->prepare($sql)
+                    ->execute( $event_id, _serialize($f), 0 );
             }
             else {
-                $sth = $self->_connection->prepare($sql);
-                $sth->execute( $event_id, $f, 0 );
+                $self->_connection->prepare($sql)
+                    ->execute( $event_id, $f, 0 );
             }
 
         }
@@ -290,6 +310,7 @@ sub event_update {
 
     $self->_connection->{AutoCommit} = 1;   # enable transactions, if possible
     $self->_connection->{RaiseError} = 0;
+     $self->_disconnect;
 
 }    #update event
 
@@ -300,19 +321,23 @@ __END__
 
 =head1 NAME
 
-Deeme::Backend::Mango - MongoDB Backend using Mango for Deeme
+Deeme::Backend::DBI - DBI Backend for Deeme
 
 =head1 SYNOPSIS
 
-  use Deeme::Backend::Mango;
-  my $e = Deeme->new( backend => Deeme::Backend::Mango->new(
-        database => "deeme",
-        host     => "mongodb://user:pass@localhost:27017",
+  use Deeme::Backend::DBI;
+  my $e = Deeme->new( backend => Deeme::Backend::DBI->new(
+        database => ["dbi options","other options"],
     ) );
+    #or
+    my $Backend = Deeme::Backend::DBI->new(
+        database => "dbi:SQLite:dbname=/path/to/sqlite.db",
+    );
+
 
 =head1 DESCRIPTION
 
-Deeme::Backend::Mango is a MongoDB Deeme database backend using Mango.
+Deeme::Backend::DBI is a DBI Deeme database backend.
 
 =head1 AUTHOR
 

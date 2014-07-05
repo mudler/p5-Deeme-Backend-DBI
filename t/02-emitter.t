@@ -17,7 +17,7 @@ subtest 'SQLite Backend' => sub {
     # Normal event
 
     my $Backend = Deeme::Backend::DBI->new(
-        database => ["dbi:SQLite:dbname=/tmp/deeme.db"],
+        database => "dbi:SQLite:dbname=/tmp/deeme.db",
     );
     my $e = Deeme->new( backend => $Backend );
 

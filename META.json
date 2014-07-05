@@ -1,5 +1,5 @@
 {
-   "abstract" : "Blah blah blah",
+   "abstract" : "DBI Backend for Deeme",
    "author" : [
       "mudler <mudler@dark-lab.net>"
    ],
@@ -46,6 +46,17 @@
       }
    },
    "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/mudler/p5-Deeme-Backend-DBI/issues"
+      },
+      "homepage" : "https://github.com/mudler/p5-Deeme-Backend-DBI",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/mudler/p5-Deeme-Backend-DBI.git",
+         "web" : "https://github.com/mudler/p5-Deeme-Backend-DBI"
+      }
+   },
    "version" : "0.01"
 }
 
