@@ -329,10 +329,10 @@ Deeme::Backend::DBI - DBI Backend for Deeme
   my $e = Deeme->new( backend => Deeme::Backend::DBI->new(
         database => ["dbi options","other options"],
     ) );
-    #or
-    my $Backend = Deeme::Backend::DBI->new(
-        database => "dbi:SQLite:dbname=/path/to/sqlite.db",
-    );
+  #or
+  my $Backend = Deeme::Backend::DBI->new(
+    database => "dbi:SQLite:dbname=/path/to/sqlite.db",
+  );
 
 
 =head1 DESCRIPTION
