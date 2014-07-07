@@ -18,12 +18,6 @@ sub new {
     return $self;
 }
 
-#   {
-#     no strict 'refs';
-# *{__PACKAGE__."::_table_exists"}=sub { print "@_\n"; my $self=shift; $self->_connect; $self->_table_exists->($self,@_);$self->_disconnect };
-# }
-##XXX: todo, wrap _connection between _connect and _disconnect
-
 sub _connect {
     return $_[0]->_connection(
         DBI->connect(
