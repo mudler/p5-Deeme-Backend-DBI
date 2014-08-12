@@ -1,6 +1,6 @@
 package Deeme::Backend::DBI;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 use Deeme::Obj 'Deeme::Backend';
 use DBI;
 use Deeme::Utils qw(_serialize _deserialize);
@@ -36,7 +36,6 @@ sub _disconnect {
 
 sub _table_exists {
     my $self   = shift;
-    $self->_connect;
     my $db     = $self->_connection;
     my $table  = shift;
     my @tables = $db->tables( '', '', '', 'TABLE' );
@@ -54,8 +53,6 @@ sub _table_exists {
         };
         return 1 unless $@;
     }
-
-    $self->_disconnect;
     return 0;
 }
 
