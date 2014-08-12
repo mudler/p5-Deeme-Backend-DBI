@@ -1,6 +1,8 @@
 Revision history for Deeme-Backend-DBI
 
 {{$NEXT}}
+
+0.02  2014-08-12 18:21:18 CEST
 	- ooops cpanfile
 	- fixing database setup	
 
