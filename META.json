@@ -4,7 +4,7 @@
       "mudler <mudler@dark-lab.net>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Milla version v1.0.4, Dist::Zilla version 5.012, CPAN::Meta::Converter version 2.133380",
+   "generated_by" : "Dist::Milla version v1.0.5, Dist::Zilla version 5.015, CPAN::Meta::Converter version 2.142060",
    "license" : [
       "perl_5"
    ],
@@ -26,7 +26,8 @@
    "prereqs" : {
       "configure" : {
          "requires" : {
-            "Module::Build::Tiny" : "0.035"
+            "Module::Build::Tiny" : "0.037",
+            "perl" : "5.008005"
          }
       },
       "develop" : {
@@ -36,12 +37,19 @@
       },
       "runtime" : {
          "requires" : {
-            "perl" : "5.008005"
+            "DBI" : "0",
+            "Deeme" : "0",
+            "Deeme::Obj" : "0",
+            "Deeme::Utils" : "0",
+            "feature" : "0"
          }
       },
       "test" : {
          "requires" : {
-            "Test::More" : "0.88"
+            "Carp::Always" : "0",
+            "DBD::SQLite" : "0",
+            "Deeme::Backend::SQLite" : "0",
+            "Test::More" : "0"
          }
       }
    },
@@ -57,6 +65,6 @@
          "web" : "https://github.com/mudler/p5-Deeme-Backend-DBI"
       }
    },
-   "version" : "0.01"
+   "version" : "0.02"
 }
 
