@@ -2,6 +2,8 @@ Revision history for Deeme-Backend-DBI
 
 {{$NEXT}}
 
+0.03  2014-08-13 11:08:07 CEST
+
             - fixing circular deps
 
 0.02  2014-08-12 18:21:18 CEST

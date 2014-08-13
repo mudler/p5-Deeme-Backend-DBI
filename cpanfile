@@ -12,4 +12,5 @@ on configure => sub {
 on test => sub {
     requires 'Carp::Always';
     requires 'Test::More';
+    requires 'DBD::SQLite';
 };
