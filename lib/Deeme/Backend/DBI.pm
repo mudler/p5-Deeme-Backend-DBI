@@ -1,6 +1,6 @@
 package Deeme::Backend::DBI;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 use Deeme::Obj 'Deeme::Backend';
 use DBI;
 use Deeme::Utils qw(_serialize _deserialize);

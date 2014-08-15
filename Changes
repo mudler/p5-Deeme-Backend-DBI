@@ -2,6 +2,8 @@ Revision history for Deeme-Backend-DBI
 
 {{$NEXT}}
 
+            - DBD::SQLite is required for tests
+
 0.03  2014-08-13 11:08:07 CEST
 
             - fixing circular deps
